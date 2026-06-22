@@ -1,9 +1,14 @@
 <script setup lang="ts">
-import { computed, watchEffect } from 'vue'
+import { computed, ref } from 'vue'
 import { useWsLoginStore, LoginStatus } from '@/stores/ws'
-import QrCode from 'qrcode.vue'
+import { useUserStore } from '@/stores/user'
+import apis from '@/services/apis'
+import { computedToken } from '@/services/request'
+import wsIns from '@/utils/websocket'
 
 const loginStore = useWsLoginStore()
+const userStore = useUserStore()
+
 const visible = computed({
   get() {
     return loginStore.showLogin
@@ -13,16 +18,72 @@ const visible = computed({
   },
 })
 
-const loginQrCode = computed(() => loginStore.loginQrCode)
-const loginStatus = computed(() => loginStore.loginStatus)
+const isRegisterMode = ref(false)
+const username = ref('')
+const password = ref('')
+const nickname = ref('')
+const loading = ref(false)
+const errMsg = ref('')
 
-watchEffect(() => {
-  // 打开窗口了 而且 二维码没获取，而且非登录就去获取二维码
-  if (visible.value && !loginQrCode.value) {
-    // 获取登录二维码
-    loginStore.getLoginQrCode()
+async function handleLogin() {
+  if (!username.value || !password.value) {
+    errMsg.value = '请输入用户名和密码'
+    return
   }
-})
+  loading.value = true
+  errMsg.value = ''
+  try {
+    const token = await apis.loginByPassword({ username: username.value, password: password.value }).send()
+    onLoginSuccess(token)
+  } catch (e: any) {
+    errMsg.value = e?.message || '登录失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+async function handleRegister() {
+  if (!username.value || !password.value) {
+    errMsg.value = '请输入用户名和密码'
+    return
+  }
+  loading.value = true
+  errMsg.value = ''
+  try {
+    const token = await apis.register({
+      username: username.value,
+      password: password.value,
+      nickname: nickname.value || undefined,
+    }).send()
+    onLoginSuccess(token)
+  } catch (e: any) {
+    errMsg.value = e?.message || '注册失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+function onLoginSuccess(token: string) {
+  localStorage.setItem('TOKEN', token)
+  computedToken.clear()
+  computedToken.get()
+  userStore.isSign = true
+  loginStore.loginStatus = LoginStatus.Success
+  loginStore.showLogin = false
+  // 重新连接 websocket 以带上 token
+  wsIns.initConnect()
+  // 获取用户详情
+  userStore.getUserDetailAction()
+  // 重置表单
+  username.value = ''
+  password.value = ''
+  nickname.value = ''
+}
+
+function toggleMode() {
+  isRegisterMode.value = !isRegisterMode.value
+  errMsg.value = ''
+}
 </script>
 
 <template>
@@ -30,25 +91,60 @@ watchEffect(() => {
     <div class="login-box">
       <img class="login-logo" src="@/assets/logo.jpeg" alt="MallChat" />
       <p class="login-slogan">边聊边买，岂不快哉~</p>
-      <div class="login-qrcode-wrapper" v-loading="!loginQrCode">
-        <QrCode
-          class="login-qrcode"
-          v-if="loginQrCode"
-          :value="loginQrCode"
-          :size="328"
-          :margin="5"
-        />
-      </div>
 
-      <p class="login-desc" v-if="loginStatus === LoginStatus.Waiting">
-        <ElIcon :size="32" class="login-desc-icon" color="var(--color-wechat)"
-          ><IEpSuccessFilled
-        /></ElIcon>
-        扫码成功~，点击“登录”继续登录
-      </p>
-      <p class="login-desc" v-if="loginStatus === LoginStatus.Init">
-        使用「<strong class="login-desc-bold">微信</strong>」扫描二维码登录~~
-      </p>
+      <div class="login-form">
+        <ElInput
+          v-model="username"
+          placeholder="用户名"
+          size="large"
+          class="login-input"
+          @keyup.enter="isRegisterMode ? handleRegister() : handleLogin()"
+        />
+        <ElInput
+          v-model="password"
+          type="password"
+          placeholder="密码"
+          size="large"
+          class="login-input"
+          show-password
+          @keyup.enter="isRegisterMode ? handleRegister() : handleLogin()"
+        />
+        <ElInput
+          v-if="isRegisterMode"
+          v-model="nickname"
+          placeholder="昵称（可选）"
+          size="large"
+          class="login-input"
+          @keyup.enter="handleRegister()"
+        />
+
+        <p class="login-error" v-if="errMsg">{{ errMsg }}</p>
+
+        <ElButton
+          v-if="!isRegisterMode"
+          type="primary"
+          size="large"
+          class="login-btn"
+          :loading="loading"
+          @click="handleLogin"
+        >
+          登录
+        </ElButton>
+        <ElButton
+          v-else
+          type="primary"
+          size="large"
+          class="login-btn"
+          :loading="loading"
+          @click="handleRegister"
+        >
+          注册
+        </ElButton>
+
+        <p class="login-toggle" @click="toggleMode">
+          {{ isRegisterMode ? '已有账号？去登录' : '没有账号？去注册' }}
+        </p>
+      </div>
     </div>
   </ElDialog>
 </template>

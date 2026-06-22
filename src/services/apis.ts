@@ -28,6 +28,12 @@ const putRequest = <T>(url: string, params?: any) => alovaIns.Put<T, unknown>(ur
 const deleteRequest = <T>(url: string, params?: any) => alovaIns.Delete<T, unknown>(url, params)
 
 export default {
+  /** 用户名密码登录 */
+  loginByPassword: (data: { username: string; password: string }) =>
+    postRequest<string>(urls.login, data),
+  /** 注册 */
+  register: (data: { username: string; password: string; nickname?: string }) =>
+    postRequest<string>(urls.register, data),
   /** 获取群成员列表 */
   getGroupList: (params?: any) => getRequest<ListResponse<UserItem>>(urls.getGroupUserList, params),
   /** 获取群成员统计 */

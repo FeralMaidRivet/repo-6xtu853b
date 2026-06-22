@@ -1,9 +1,6 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import wsIns from '@/utils/websocket'
-import { WsRequestMsgType } from '@/utils/wsType'
-
 export enum LoginStatus {
   Init,
   Waiting,
@@ -14,9 +11,11 @@ export const useWsLoginStore = defineStore('wsLogin', () => {
   const loginQrCode = ref<string>()
   const showLogin = ref(false)
   const loginStatus = ref(LoginStatus.Init)
+
   function getLoginQrCode() {
-    wsIns.send({ type: WsRequestMsgType.RequestLoginQrCode })
+    // No longer using QR code login - using username/password instead
   }
+
   function resetLoginState() {
     loginQrCode.value = undefined
     loginStatus.value = LoginStatus.Init
